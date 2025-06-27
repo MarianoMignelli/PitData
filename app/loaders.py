@@ -1,5 +1,6 @@
 import pandas as pd
 import chardet
+from io import StringIO
 
 def detect_encoding(file):
     raw_data = file.read()
@@ -12,16 +13,18 @@ def load_telemetry_csv(file):
     content = file.read().decode(encoding)
     lines = content.splitlines()
 
-    # Buscar la primera línea que tiene más de 5 columnas (cabecera real)
+    # Detectar la línea de encabezado real
     header_line_index = next(
-        (i for i, line in enumerate(lines) if len(line.split(",")) > 5), None
+        (i for i, line in enumerate(lines) if len(line.split(",")) >= 10 and not all(c in ['%', 'kg', 'm', ''] for c in line.split(","))),
+        None
     )
 
     if header_line_index is None:
         raise ValueError("No se encontró un encabezado válido en el CSV.")
 
-    # Leer solo desde esa línea en adelante
     cleaned_content = "\n".join(lines[header_line_index:])
-    from io import StringIO
-    df = pd.read_csv(StringIO(cleaned_content))
+
+    # Cargar el DataFrame ignorando filas malformadas
+    df = pd.read_csv(StringIO(cleaned_content), on_bad_lines='skip')
     return df
+
