@@ -1,31 +1,23 @@
+# loaders.py
+
 import pandas as pd
-import io
+import chardet
 
-def load_telemetry_csv(uploaded_file) -> pd.DataFrame:
-    """
-    Carga un archivo CSV de telemetría ignorando encabezados inválidos y
-    detectando la línea correcta del header por cantidad de columnas.
-    """
-    content = uploaded_file.read().decode("utf-8", errors="ignore")
-    lines = content.splitlines()
+def detect_encoding(file):
+    raw_data = file.read()
+    result = chardet.detect(raw_data)
+    file.seek(0)
+    return result['encoding']
 
-    max_commas = 0
-    header_line = 0
-
+def find_header_row(lines, min_columns=5):
     for i, line in enumerate(lines):
-        num_commas = line.count(",")
-        if num_commas > max_commas:
-            max_commas = num_commas
-            header_line = i
+        if len(line.strip().split(",")) >= min_columns:
+            return i
+    return 0
 
-    try:
-        df = pd.read_csv(
-            io.StringIO(content),
-            skiprows=header_line,
-            engine="python",            # usa un parser más tolerante
-            on_bad_lines="skip"         # ignora filas mal formateadas
-        )
-    except Exception as e:
-        raise ValueError(f"Error al leer CSV: {str(e)}")
-
+def load_telemetry_csv(uploaded_file):
+    encoding = detect_encoding(uploaded_file)
+    lines = uploaded_file.read().decode(encoding).splitlines()
+    header_row = find_header_row(lines)
+    df = pd.read_csv(pd.compat.StringIO("\n".join(lines[header_row:])))
     return df
