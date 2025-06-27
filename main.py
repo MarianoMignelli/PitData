@@ -3,8 +3,15 @@ import pandas as pd
 
 from app.loaders import load_telemetry_csv
 from app.detect import detect_column
-from app.utils import clean_numeric_columns, compute_lap_times, compute_avg_lap, get_fastest_and_slowest_laps, compute_max_min, format_lap_time
-from app.plots import plot_speed_line, plot_brake_line, plot_corner_speed, plot_speed_comparison, plot_delta_time
+from app.utils import (
+    clean_numeric_columns, get_valid_laps,
+    get_fastest_and_slowest_laps, compute_max_min,
+    format_lap_time
+)
+from app.plots import (
+    plot_speed_line, plot_brake_line,
+    plot_corner_speed, plot_speed_comparison, plot_delta_time
+)
 
 st.set_page_config(page_title="PitData", layout="wide")
 st.title("🏎️ Lee tu telemetría con Nosotros")
@@ -16,43 +23,46 @@ if uploaded_file:
         df = load_telemetry_csv(uploaded_file)
 
         # Detectar columnas clave
-        tiempo = detect_column(df, ["lap time", "laptime"])
-        velocidad = detect_column(df, ["ground speed", "speed", "velocidad", "spd"])
+        tiempo = detect_column(df, ["time", "tiempo", "timestamp"])
+        velocidad = detect_column(df, ["speed", "velocidad", "spd", "ground speed"])
         rpm = detect_column(df, ["rpm"])
         g_lat = detect_column(df, ["g_lat", "g lateral"])
         g_long = detect_column(df, ["g_long", "g longitudinal"])
         vuelta = detect_column(df, ["lap", "vuelta"])
         distancia = detect_column(df, ["lap distance", "distance"])
         freno = detect_column(df, ["brake", "freno"])
+        lap_invalid = detect_column(df, ["lap invalidated", "lap_invalid"])
 
-        # Limpiar columnas numéricas
+        # Limpiar
         df = clean_numeric_columns(df, [tiempo, velocidad, rpm, g_lat, g_long, distancia, freno])
 
         st.success("✅ Datos cargados correctamente")
 
-        # Calcular tiempos por vuelta
-        lap_times = compute_lap_times(df, vuelta, tiempo)
+        # Calcular vueltas válidas
+        lap_times = get_valid_laps(df, vuelta, tiempo, invalid_col=lap_invalid)
 
-        # Filtrar vueltas válidas (ej: entre 60s y 200s)
-        lap_times_valid = {k: v for k, v in lap_times.items() if 60 <= v <= 200}
-        valid_laps = list(lap_times_valid.keys())
-
-        if len(valid_laps) < 2:
-            st.error("❌ No hay suficientes vueltas válidas para análisis (deben durar entre 60 y 200 segundos).")
+        if not lap_times:
+            st.warning("No se detectaron vueltas válidas en el archivo.")
             st.stop()
 
-        df_valid = df[df[vuelta].isin(valid_laps)]
+        # Determinar vueltas rápida y lenta
+        lap_fast, lap_slow = get_fastest_and_slowest_laps(lap_times)
+        delta_fast_slow = lap_times[lap_slow] - lap_times[lap_fast]
 
-        lap_fast, lap_slow = get_fastest_and_slowest_laps(lap_times_valid)
-        delta_fast_slow = lap_times_valid[lap_slow] - lap_times_valid[lap_fast]
-        lap_avg = sum(lap_times_valid.values()) / len(lap_times_valid)
+        # Tiempo promedio
+        lap_avg = sum(lap_times.values()) / len(lap_times)
+
+        # Filtrar solo data válida
+        df_valid = df[df[vuelta].isin(lap_times.keys())]
+
+        # Velocidad promedio y máxima sobre vueltas válidas
         v_avg, v_max = compute_max_min(df_valid, velocidad)
 
         # Mostrar métricas
         st.markdown("### 📊 Resumen")
         col1, col2, col3 = st.columns(3)
-        col1.metric("Vuelta Rápida", format_lap_time(lap_times_valid[lap_fast]), f"Vuelta {lap_fast}")
-        col2.metric("Vuelta Lenta", format_lap_time(lap_times_valid[lap_slow]), f"Vuelta {lap_slow}")
+        col1.metric("Vuelta Rápida", format_lap_time(lap_times[lap_fast]), f"Vuelta {lap_fast}")
+        col2.metric("Vuelta Lenta", format_lap_time(lap_times[lap_slow]), f"Vuelta {lap_slow}")
         col3.metric("Delta entre vueltas", f"{delta_fast_slow:.2f}s")
 
         col4, col5, col6 = st.columns(3)
@@ -60,11 +70,11 @@ if uploaded_file:
         col5.metric("Velocidad promedio", f"{v_avg:.1f} km/h")
         col6.metric("Velocidad máxima", f"{v_max:.1f} km/h")
 
-        # Selector de vuelta para análisis
+        # Selector de vuelta válida
         vuelta_sel = st.selectbox(
-            "📍 Seleccioná una vuelta para comparar",
-            valid_laps,
-            format_func=lambda k: f"Vuelta {k} – {lap_times_valid[k]:.2f}s"
+            "📍 Seleccioná una vuelta válida",
+            sorted(lap_times.keys()),
+            format_func=lambda k: f"Vuelta {k} – {format_lap_time(lap_times[k])}"
         )
 
         # Tabs con visualizaciones
@@ -102,7 +112,7 @@ if uploaded_file:
 
         # Datos crudos (opcional)
         with st.expander("📂 Ver datos crudos"):
-            st.dataframe(df_valid.head(100))
+            st.dataframe(df.head(100))
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
