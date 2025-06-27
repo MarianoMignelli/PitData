@@ -1,13 +1,11 @@
 # main.py
 
-# main.py
-
 import streamlit as st
-import pandas as pd
+from app.core.loaders import load_telemetry_csv
+from app.core.detect import detect_column
 import plotly.express as px
 import plotly.graph_objects as go
-from app.loaders import load_telemetry_csv
-from app.detect import detect_column
+import pandas as pd
 
 st.set_page_config(page_title="Dashboard de Telemetría", layout="wide")
 st.title("🏎️ Dashboard de Telemetría Automovilística")
@@ -17,78 +15,78 @@ uploaded_file = st.file_uploader("Subí tu archivo CSV", type=["csv"])
 if uploaded_file:
     try:
         df = load_telemetry_csv(uploaded_file)
+        st.success("✅ Archivo cargado exitosamente")
 
         # Detectar columnas claves
-        tiempo_col = detect_column(df, ["time", "tiempo", "timestamp"])
-        velocidad_col = detect_column(df, ["speed", "velocidad", "spd"])
-        rpm_col = detect_column(df, ["rpm"])
-        g_lat_col = detect_column(df, ["g_lat", "g lateral"])
-        g_long_col = detect_column(df, ["g_long", "g longitudinal"])
-        vuelta_col = detect_column(df, ["lap", "vuelta"])
+        tiempo = detect_column(df, ["time", "tiempo", "timestamp"])
+        velocidad = detect_column(df, ["speed", "velocidad", "spd"])
+        rpm = detect_column(df, ["rpm"])
+        g_lat = detect_column(df, ["g_lat", "g lateral"])
+        g_long = detect_column(df, ["g_long", "g longitudinal"])
+        vuelta = detect_column(df, ["lap", "vuelta"])
+        distancia = detect_column(df, ["lap distance", "distance"])
 
-        if not vuelta_col or not tiempo_col:
-            st.error("No se encontraron las columnas necesarias para identificar vueltas o tiempo.")
-            st.stop()
+        if tiempo:
+            df[tiempo] = pd.to_numeric(df[tiempo], errors='coerce')
+        if velocidad:
+            df[velocidad] = pd.to_numeric(df[velocidad], errors='coerce')
+        if rpm:
+            df[rpm] = pd.to_numeric(df[rpm], errors='coerce')
+        if g_lat:
+            df[g_lat] = pd.to_numeric(df[g_lat], errors='coerce')
+        if g_long:
+            df[g_long] = pd.to_numeric(df[g_long], errors='coerce')
+        if distancia:
+            df[distancia] = pd.to_numeric(df[distancia], errors='coerce')
 
-        # Intentar convertir la columna de tiempo a numérico
-        try:
-            df[tiempo_col] = pd.to_numeric(df[tiempo_col], errors="coerce")
-        except Exception as e:
-            st.error(f"Error convirtiendo tiempo a número: {e}")
-            st.stop()
+        st.dataframe(df.head())
 
-        # Calcular tiempo total por vuelta
-        tiempo_total_por_vuelta = df.groupby(vuelta_col)[tiempo_col].agg(lambda x: x.max() - x.min())
-        tiempo_total_por_vuelta = tiempo_total_por_vuelta.sort_values()
+        if vuelta and tiempo:
+            vueltas = df[vuelta].dropna().unique()
+            tiempos_por_vuelta = df.groupby(vuelta)[tiempo].max() - df.groupby(vuelta)[tiempo].min()
+            vuelta_rapida = tiempos_por_vuelta.idxmin()
+            vuelta_lenta = tiempos_por_vuelta.idxmax()
 
-        # Selector de vuelta
-        st.subheader("🎯 Selección de vuelta a analizar")
-        vuelta_seleccionada = st.selectbox("Selecciona una vuelta", tiempo_total_por_vuelta.index,
-                                           format_func=lambda x: f"Vuelta {x} – {tiempo_total_por_vuelta[x]:.2f}s")
+            st.subheader("🏁 Comparación entre Vuelta Rápida y Lenta")
+            st.markdown(f"**Vuelta más rápida:** {vuelta_rapida} - {tiempos_por_vuelta[vuelta_rapida]:.3f}s")
+            st.markdown(f"**Vuelta más lenta:** {vuelta_lenta} - {tiempos_por_vuelta[vuelta_lenta]:.3f}s")
 
-        df_vuelta = df[df[vuelta_col] == vuelta_seleccionada]
+            if distancia and velocidad:
+                fig = go.Figure()
+                for v, label, color in zip([vuelta_rapida, vuelta_lenta], ["Rápida", "Lenta"], ["lime", "red"]):
+                    mask = df[vuelta] == v
+                    fig.add_trace(go.Scatter(x=df[mask][distancia], y=df[mask][velocidad], name=f"{label} (Vuelta {v})", line=dict(color=color)))
+                fig.update_layout(title="Velocidad vs Distancia - Vuelta Rápida vs Lenta", xaxis_title="Distancia (m)", yaxis_title="Velocidad (km/h)", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
 
-        st.success("✅ Vuelta seleccionada correctamente")
+        st.subheader("📊 Visualizaciones adicionales")
 
-        st.subheader("📊 Telemetría de la vuelta seleccionada")
-
-        if tiempo_col and velocidad_col:
-            fig = px.line(df_vuelta, x=tiempo_col, y=velocidad_col, title="Velocidad vs Tiempo")
+        if tiempo and velocidad:
+            fig = px.line(df, x=tiempo, y=velocidad, title="Velocidad vs Tiempo")
             st.plotly_chart(fig, use_container_width=True)
 
-        if tiempo_col and rpm_col:
-            fig = px.line(df_vuelta, x=tiempo_col, y=rpm_col, title="RPM vs Tiempo")
+        if tiempo and rpm:
+            fig = px.line(df, x=tiempo, y=rpm, title="RPM vs Tiempo")
             st.plotly_chart(fig, use_container_width=True)
 
-        if tiempo_col and g_lat_col and g_long_col:
+        if tiempo and g_lat and g_long:
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df_vuelta[tiempo_col], y=df_vuelta[g_lat_col], name="G Lateral"))
-            fig.add_trace(go.Scatter(x=df_vuelta[tiempo_col], y=df_vuelta[g_long_col], name="G Longitudinal"))
+            fig.add_trace(go.Scatter(x=df[tiempo], y=df[g_lat], name="G Lateral"))
+            fig.add_trace(go.Scatter(x=df[tiempo], y=df[g_long], name="G Longitudinal"))
             fig.update_layout(title="Fuerzas G", template="plotly_dark")
             st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("📈 Velocidad promedio")
-        velocidad_promedio = df.groupby(vuelta_col)[velocidad_col].mean()
-        st.metric(label=f"Velocidad promedio vuelta {vuelta_seleccionada}", value=f"{velocidad_promedio[vuelta_seleccionada]:.2f} km/h")
-
-        st.subheader("🏁 Comparación de sectores (estimados)")
-        try:
-            df_vuelta_sorted = df_vuelta.sort_values(by=tiempo_col).reset_index(drop=True)
-            df_vuelta_sorted["sector"] = pd.qcut(df_vuelta_sorted.index, q=3, labels=["Sector 1", "Sector 2", "Sector 3"])
-            sector_times = df_vuelta_sorted.groupby("sector")[tiempo_col].agg(lambda x: x.max() - x.min())
-            st.dataframe(sector_times.rename("Duración (s)"))
-        except Exception as e:
-            st.warning(f"No se pudo calcular la comparación de sectores: {e}")
-
-        st.subheader("🌀 Velocidad por curva (estimado)")
-        try:
-            # Detectar zonas de frenado como 'curvas' simples por velocidad mínima
-            curvas = df_vuelta_sorted[df_vuelta_sorted[velocidad_col] < df_vuelta_sorted[velocidad_col].quantile(0.2)]
-            curvas = curvas.groupby(curvas.index // 20)[velocidad_col].min().reset_index(drop=True)
-            fig = px.bar(curvas, y=velocidad_col, title="Velocidad mínima por curva estimada")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"No se pudo estimar velocidad por curva: {e}")
+        if vuelta:
+            st.subheader("🛣️ Comparación por vuelta personalizada")
+            vueltas = df[vuelta].dropna().unique()
+            seleccionadas = st.multiselect("Seleccionar vueltas", vueltas)
+            if seleccionadas and tiempo and velocidad:
+                fig = go.Figure()
+                for v in seleccionadas:
+                    mask = df[vuelta] == v
+                    fig.add_trace(go.Scatter(x=df[mask][tiempo], y=df[mask][velocidad], name=f"Vuelta {v}"))
+                fig.update_layout(title="Velocidad por vuelta", template="plotly_dark")
+                st.plotly_chart(fig, use_container_width=True)
 
     except Exception as e:
         st.error(f"❌ Error al procesar el archivo: {e}")
