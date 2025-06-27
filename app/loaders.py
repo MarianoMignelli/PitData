@@ -1,7 +1,6 @@
-# loaders.py
-
 import pandas as pd
 import chardet
+from io import StringIO
 
 def detect_encoding(file):
     raw_data = file.read()
@@ -19,5 +18,5 @@ def load_telemetry_csv(uploaded_file):
     encoding = detect_encoding(uploaded_file)
     lines = uploaded_file.read().decode(encoding).splitlines()
     header_row = find_header_row(lines)
-    df = pd.read_csv(pd.compat.StringIO("\n".join(lines[header_row:])))
+    df = pd.read_csv(StringIO("\n".join(lines[header_row:])))
     return df
