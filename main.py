@@ -1,8 +1,8 @@
 # main.py
 
 import streamlit as st
-from app.core.loaders import load_telemetry_csv
-from app.core.detect import detect_column
+from app.loaders import load_telemetry_csv
+from app.detect import detect_column
 import plotly.express as px
 import plotly.graph_objects as go
 
