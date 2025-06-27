@@ -30,3 +30,4 @@ def format_lap_time(seconds: float) -> str:
     minutes = int(seconds // 60)
     remaining_seconds = seconds % 60
     return f"{minutes}:{remaining_seconds:04.1f}"
+
