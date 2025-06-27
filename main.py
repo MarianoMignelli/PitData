@@ -1,5 +1,7 @@
 # main.py
 
+# main.py
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -26,6 +28,13 @@ if uploaded_file:
 
         if not vuelta_col or not tiempo_col:
             st.error("No se encontraron las columnas necesarias para identificar vueltas o tiempo.")
+            st.stop()
+
+        # Intentar convertir la columna de tiempo a numérico
+        try:
+            df[tiempo_col] = pd.to_numeric(df[tiempo_col], errors="coerce")
+        except Exception as e:
+            st.error(f"Error convirtiendo tiempo a número: {e}")
             st.stop()
 
         # Calcular tiempo total por vuelta
