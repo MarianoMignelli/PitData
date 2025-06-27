@@ -1,35 +1,89 @@
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 
-def clean_numeric_columns(df: pd.DataFrame, columns: list) -> pd.DataFrame:
-    for col in columns:
-        if col and col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    return df
 
-def get_valid_laps(df: pd.DataFrame, lap_col="Lap", time_col="Time", invalid_col="Lap Invalidated") -> dict:
-    """
-    Devuelve un diccionario de vueltas válidas (Lap ID -> tiempo de vuelta en segundos).
-    Excluye vueltas con Lap Invalidated == 1 y filtra por duración razonable.
-    """
-    valid_laps = {}
-    for lap_id, group in df.groupby(lap_col):
-        if invalid_col in group.columns and group[invalid_col].max() == 1:
-            continue  # vuelta inválida
-        t_min = group[time_col].min()
-        t_max = group[time_col].max()
-        lap_time = t_max - t_min
-        if 60 <= lap_time <= 200:  # filtro de duración razonable
-            valid_laps[lap_id] = lap_time
-    return valid_laps
+def plot_speed_line(df, lap_col, speed_col, dist_col, lap_selected):
+    df_plot = df[df[lap_col] == lap_selected]
+    fig = px.line(
+        df_plot,
+        x=dist_col,
+        y=speed_col,
+        title=f"Velocidad – Vuelta {lap_selected}",
+        labels={dist_col: "Distancia (m)", speed_col: "Velocidad (km/h)"}
+    )
+    fig.update_layout(template="plotly_dark")
+    return fig
 
-def get_fastest_and_slowest_laps(lap_times: dict):
-    sorted_laps = sorted(lap_times.items(), key=lambda x: x[1])
-    return sorted_laps[0][0], sorted_laps[-1][0]
 
-def compute_max_min(df: pd.DataFrame, column: str) -> tuple:
-    return df[column].mean(), df[column].max()
+def plot_brake_line(df, lap_col, brake_col, dist_col, lap_selected):
+    df_plot = df[df[lap_col] == lap_selected]
+    fig = px.line(
+        df_plot,
+        x=dist_col,
+        y=brake_col,
+        title=f"Freno – Vuelta {lap_selected}",
+        labels={dist_col: "Distancia (m)", brake_col: "Freno (%)"}
+    )
+    fig.update_layout(template="plotly_dark")
+    return fig
 
-def format_lap_time(seconds: float) -> str:
-    minutes = int(seconds // 60)
-    remaining_seconds = seconds % 60
-    return f"{minutes}:{remaining_seconds:.1f}"
+
+def plot_corner_speed(df, lap_col, speed_col, dist_col, lap_selected):
+    df_plot = df[df[lap_col] == lap_selected]
+    fig = px.scatter(
+        df_plot,
+        x=dist_col,
+        y=speed_col,
+        title=f"Velocidad por Curva – Vuelta {lap_selected}",
+        labels={dist_col: "Distancia (m)", speed_col: "Velocidad (km/h)"},
+        opacity=0.6
+    )
+    fig.update_layout(template="plotly_dark")
+    return fig
+
+
+def plot_speed_comparison(df, lap_col, speed_col, dist_col, laps_to_compare):
+    fig = go.Figure()
+    for lap in laps_to_compare:
+        df_lap = df[df[lap_col] == lap]
+        fig.add_trace(go.Scatter(
+            x=df_lap[dist_col],
+            y=df_lap[speed_col],
+            mode="lines",
+            name=f"Vuelta {lap}"
+        ))
+    avg_df = df.groupby(dist_col).mean(numeric_only=True).reset_index()
+    fig.add_trace(go.Scatter(
+        x=avg_df[dist_col],
+        y=avg_df[speed_col],
+        mode="lines",
+        name="Promedio",
+        line=dict(dash="dash")
+    ))
+    fig.update_layout(
+        title="Comparación de Velocidad",
+        template="plotly_dark",
+        xaxis_title="Distancia (m)",
+        yaxis_title="Velocidad (km/h)"
+    )
+    return fig
+
+
+def plot_delta_time(df_fast, df_other, dist_col, time_col):
+    df_merged = pd.merge(
+        df_fast[[dist_col, time_col]],
+        df_other[[dist_col, time_col]],
+        on=dist_col,
+        suffixes=("_fast", "_other")
+    )
+    df_merged["delta"] = df_merged[time_col + "_other"] - df_merged[time_col + "_fast"]
+    fig = px.line(
+        df_merged,
+        x=dist_col,
+        y="delta",
+        title="Delta de Tiempo entre Vueltas",
+        labels={dist_col: "Distancia (m)", "delta": "Delta (s)"}
+    )
+    fig.update_layout(template="plotly_dark")
+    return fig
