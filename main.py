@@ -1,4 +1,3 @@
-
 import streamlit as st
 from app.core import load_and_prepare_data
 from app.plots import render_dashboard
