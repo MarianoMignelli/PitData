@@ -8,8 +8,8 @@ from app.detect import detect_column
 from app.utils import clean_numeric_columns, compute_lap_times, get_fastest_and_slowest_laps
 from app.plots import plot_speed_comparison, plot_delta_time
 
-st.set_page_config(page_title="Dashboard de Telemetría", layout="wide")
-st.title("🏎️ Dashboard de Telemetría Automovilística")
+st.set_page_config(page_title="PitData", layout="wide")
+st.title("🏎️ Lee tu telemetria con Nosotros!")
 
 uploaded_file = st.file_uploader("📁 Subí tu archivo CSV", type="csv")
 
