@@ -30,11 +30,23 @@ if uploaded_file:
 
         st.success("✅ Datos cargados correctamente")
 
-        # Calcular tiempos de vuelta
+         # Calcular tiempos de vuelta
         lap_times = compute_lap_times(df, vuelta, tiempo)
-        lap_avg = compute_avg_lap(df, vuelta, tiempo)
-        lap_fast, lap_slow = get_fastest_and_slowest_laps(lap_times)
-        delta_fast_slow = lap_times[lap_slow] - lap_times[lap_fast]
+
+        # Filtrar vueltas válidas (entre 60s y 200s por ejemplo)
+        lap_times_valid = {k: v for k, v in lap_times.items() if 60 <= v <= 200}
+        valid_laps = list(lap_times_valid.keys())
+
+        # Recalcular datos con vueltas válidas
+        lap_fast, lap_slow = get_fastest_and_slowest_laps(lap_times_valid)
+        delta_fast_slow = lap_times_valid[lap_slow] - lap_times_valid[lap_fast]
+
+        df_valid = df[df[vuelta].isin(valid_laps)]
+
+        # Calcular promedio
+        lap_avg = sum(lap_times_valid.values()) / len(lap_times_valid)
+        v_avg, v_max = compute_max_min(df_valid, velocidad)
+
 
         # Velocidad promedio y máxima
         v_avg, v_max = compute_max_min(df, velocidad)
