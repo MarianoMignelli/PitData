@@ -25,8 +25,13 @@ def get_fastest_and_slowest_laps(lap_times: dict):
     return sorted_laps[0][0], sorted_laps[-1][0]
 
 
-def compute_avg_lap(df: pd.DataFrame, lap_col: str) -> pd.DataFrame:
-    return df.groupby(lap_col).mean(numeric_only=True).mean().to_frame().T
+def compute_avg_lap(df, lap_col, distance_col):
+    """
+    Calcula la velocidad promedio por distancia en todas las vueltas y devuelve una curva promedio.
+    """
+    avg_df = df.groupby(distance_col).mean(numeric_only=True).reset_index()
+    avg_df[lap_col] = 'Promedio'
+    return avg_df
 
 
 def compute_max_min(df: pd.DataFrame, column: str) -> tuple:
