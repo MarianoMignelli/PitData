@@ -10,9 +10,13 @@ def detect_encoding(file):
 
 def find_header_row(lines, min_columns=5):
     for i, line in enumerate(lines):
-        if len(line.strip().split(",")) >= min_columns:
-            return i
+        columns = line.strip().split(",")
+        if len(columns) >= min_columns:
+            # Detectar si hay demasiadas unidades típicas (%, kg, m, s, etc.)
+            if not all(col.strip().lower() in ['m', '%', 'kg', 's', 'none', ''] for col in columns):
+                return i
     return 0
+
 
 def load_telemetry_csv(uploaded_file):
     encoding = detect_encoding(uploaded_file)
