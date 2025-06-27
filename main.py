@@ -3,22 +3,8 @@ import pandas as pd
 
 from app.loaders import load_telemetry_csv
 from app.detect import detect_column
-from app.utils import (
-    clean_numeric_columns,
-    compute_lap_times,
-    get_fastest_and_slowest_laps,
-    compute_avg_lap_time,
-    compute_avg_lap_curve,
-    compute_max_min,
-    format_lap_time,
-)
-from app.plots import (
-    plot_speed_line,
-    plot_brake_line,
-    plot_corner_speed,
-    plot_speed_comparison,
-    plot_delta_time,
-)
+from app.utils import clean_numeric_columns, compute_lap_times, compute_avg_lap, get_fastest_and_slowest_laps, compute_max_min, format_lap_time
+from app.plots import plot_speed_line, plot_brake_line, plot_corner_speed, plot_speed_comparison, plot_delta_time
 
 st.set_page_config(page_title="PitData", layout="wide")
 st.title("🏎️ Lee tu telemetría con Nosotros")
@@ -30,8 +16,8 @@ if uploaded_file:
         df = load_telemetry_csv(uploaded_file)
 
         # Detectar columnas clave
-        tiempo = detect_column(df, ["time", "tiempo", "timestamp"])
-        velocidad = detect_column(df, ["speed", "velocidad", "spd"])
+        tiempo = detect_column(df, ["lap time", "laptime"])
+        velocidad = detect_column(df, ["ground speed", "speed", "velocidad", "spd"])
         rpm = detect_column(df, ["rpm"])
         g_lat = detect_column(df, ["g_lat", "g lateral"])
         g_long = detect_column(df, ["g_long", "g longitudinal"])
@@ -39,21 +25,21 @@ if uploaded_file:
         distancia = detect_column(df, ["lap distance", "distance"])
         freno = detect_column(df, ["brake", "freno"])
 
-        # Limpiar datos
+        # Limpiar columnas numéricas
         df = clean_numeric_columns(df, [tiempo, velocidad, rpm, g_lat, g_long, distancia, freno])
 
         st.success("✅ Datos cargados correctamente")
 
-        # Cálculo de tiempos de vuelta
+        # Calcular tiempos de vuelta
         lap_times = compute_lap_times(df, vuelta, tiempo)
-        lap_avg = compute_avg_lap_time(df, vuelta, tiempo)
+        lap_avg = compute_avg_lap(df, vuelta, tiempo)
         lap_fast, lap_slow = get_fastest_and_slowest_laps(lap_times)
         delta_fast_slow = lap_times[lap_slow] - lap_times[lap_fast]
 
-        # Velocidad máxima y promedio
+        # Velocidad promedio y máxima
         v_avg, v_max = compute_max_min(df, velocidad)
 
-        # Mostrar resumen
+        # Mostrar métricas
         st.markdown("### 📊 Resumen")
         col1, col2, col3 = st.columns(3)
         col1.metric("Vuelta Rápida", format_lap_time(lap_times[lap_fast]), f"Vuelta {lap_fast}")
@@ -72,19 +58,22 @@ if uploaded_file:
             format_func=lambda k: f"Vuelta {k} – {lap_times[k]:.2f}s"
         )
 
-        # Calcular curva promedio
-        df_avg = compute_avg_lap_curve(df, vuelta, distancia)
-
         # Tabs
-        tabs = st.tabs(["📈 Velocidad", "🛞 Freno", "📍 Velocidad por curva", "📊 Comparación", "⏱️ Delta de tiempo"])
+        tabs = st.tabs([
+            "📈 Telemetría",
+            "🛞 Freno",
+            "📍 Velocidad por curva",
+            "📊 Comparación rápida vs promedio",
+            "⏱️ Delta de tiempo"
+        ])
 
         with tabs[0]:
-            st.subheader("Velocidad (línea)")
+            st.subheader("Velocidad")
             st.plotly_chart(plot_speed_line(df, vuelta, velocidad, distancia, vuelta_sel), use_container_width=True)
 
         with tabs[1]:
             if freno:
-                st.subheader("Freno (línea)")
+                st.subheader("Freno")
                 st.plotly_chart(plot_brake_line(df, vuelta, freno, distancia, vuelta_sel), use_container_width=True)
             else:
                 st.warning("No se detectó columna de freno.")
@@ -94,15 +83,11 @@ if uploaded_file:
             st.plotly_chart(plot_corner_speed(df, vuelta, velocidad, distancia, vuelta_sel), use_container_width=True)
 
         with tabs[3]:
-            st.subheader("Comparación Vuelta Rápida vs Curva Promedio")
-            df_fast = df[df[vuelta] == lap_fast]
-            st.plotly_chart(
-                plot_speed_comparison(pd.concat([df_fast, df_avg]), vuelta, velocidad, distancia, ["Promedio", lap_fast]),
-                use_container_width=True
-            )
+            st.subheader("Comparación Vuelta Rápida vs Promedio")
+            st.plotly_chart(plot_speed_comparison(df, vuelta, velocidad, distancia, [lap_fast]), use_container_width=True)
 
         with tabs[4]:
-            st.subheader("Delta de Tiempo entre vueltas")
+            st.subheader("Delta de Tiempo")
             df_fast = df[df[vuelta] == lap_fast]
             df_sel = df[df[vuelta] == vuelta_sel]
             st.plotly_chart(plot_delta_time(df_fast, df_sel, distancia, tiempo), use_container_width=True)
