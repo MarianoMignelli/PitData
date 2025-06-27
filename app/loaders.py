@@ -18,5 +18,9 @@ def load_telemetry_csv(uploaded_file):
     encoding = detect_encoding(uploaded_file)
     lines = uploaded_file.read().decode(encoding).splitlines()
     header_row = find_header_row(lines)
-    df = pd.read_csv(StringIO("\n".join(lines[header_row:])))
+    try:
+        df = pd.read_csv(StringIO("\n".join(lines[header_row:])), on_bad_lines='skip')
+    except Exception as e:
+        raise ValueError(f"Error al procesar el archivo: {e}")
     return df
+
