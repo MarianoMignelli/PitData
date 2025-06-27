@@ -1,89 +1,46 @@
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 
 
-def plot_speed_line(df, lap_col, speed_col, dist_col, lap_selected):
-    df_plot = df[df[lap_col] == lap_selected]
-    fig = px.line(
-        df_plot,
-        x=dist_col,
-        y=speed_col,
-        title=f"Velocidad – Vuelta {lap_selected}",
-        labels={dist_col: "Distancia (m)", speed_col: "Velocidad (km/h)"}
-    )
-    fig.update_layout(template="plotly_dark")
-    return fig
+def clean_numeric_columns(df: pd.DataFrame, columns: list) -> pd.DataFrame:
+    for col in columns:
+        if col and col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
 
 
-def plot_brake_line(df, lap_col, brake_col, dist_col, lap_selected):
-    df_plot = df[df[lap_col] == lap_selected]
-    fig = px.line(
-        df_plot,
-        x=dist_col,
-        y=brake_col,
-        title=f"Freno – Vuelta {lap_selected}",
-        labels={dist_col: "Distancia (m)", brake_col: "Freno (%)"}
-    )
-    fig.update_layout(template="plotly_dark")
-    return fig
+def filter_valid_laps(df: pd.DataFrame, invalid_col: str) -> pd.DataFrame:
+    if invalid_col and invalid_col in df.columns:
+        return df[df[invalid_col] != 1].copy()
+    return df.copy()
 
 
-def plot_corner_speed(df, lap_col, speed_col, dist_col, lap_selected):
-    df_plot = df[df[lap_col] == lap_selected]
-    fig = px.scatter(
-        df_plot,
-        x=dist_col,
-        y=speed_col,
-        title=f"Velocidad por Curva – Vuelta {lap_selected}",
-        labels={dist_col: "Distancia (m)", speed_col: "Velocidad (km/h)"},
-        opacity=0.6
-    )
-    fig.update_layout(template="plotly_dark")
-    return fig
+def compute_lap_times(df: pd.DataFrame, lap_col: str, time_col: str) -> dict:
+    lap_times = {}
+    for lap in df[lap_col].dropna().unique():
+        lap_df = df[df[lap_col] == lap]
+        if not lap_df.empty:
+            t_min = lap_df[time_col].min()
+            t_max = lap_df[time_col].max()
+            lap_times[lap] = t_max - t_min
+    return lap_times
 
 
-def plot_speed_comparison(df, lap_col, speed_col, dist_col, laps_to_compare):
-    fig = go.Figure()
-    for lap in laps_to_compare:
-        df_lap = df[df[lap_col] == lap]
-        fig.add_trace(go.Scatter(
-            x=df_lap[dist_col],
-            y=df_lap[speed_col],
-            mode="lines",
-            name=f"Vuelta {lap}"
-        ))
-    avg_df = df.groupby(dist_col).mean(numeric_only=True).reset_index()
-    fig.add_trace(go.Scatter(
-        x=avg_df[dist_col],
-        y=avg_df[speed_col],
-        mode="lines",
-        name="Promedio",
-        line=dict(dash="dash")
-    ))
-    fig.update_layout(
-        title="Comparación de Velocidad",
-        template="plotly_dark",
-        xaxis_title="Distancia (m)",
-        yaxis_title="Velocidad (km/h)"
-    )
-    return fig
+def get_fastest_and_slowest_laps(lap_times: dict):
+    sorted_laps = sorted(lap_times.items(), key=lambda x: x[1])
+    return sorted_laps[0][0], sorted_laps[-1][0]
 
 
-def plot_delta_time(df_fast, df_other, dist_col, time_col):
-    df_merged = pd.merge(
-        df_fast[[dist_col, time_col]],
-        df_other[[dist_col, time_col]],
-        on=dist_col,
-        suffixes=("_fast", "_other")
-    )
-    df_merged["delta"] = df_merged[time_col + "_other"] - df_merged[time_col + "_fast"]
-    fig = px.line(
-        df_merged,
-        x=dist_col,
-        y="delta",
-        title="Delta de Tiempo entre Vueltas",
-        labels={dist_col: "Distancia (m)", "delta": "Delta (s)"}
-    )
-    fig.update_layout(template="plotly_dark")
-    return fig
+def compute_avg_lap(df, lap_col, distance_col):
+    avg_df = df.groupby(distance_col).mean(numeric_only=True).reset_index()
+    avg_df[lap_col] = 'Promedio'
+    return avg_df
+
+
+def compute_max_min(df: pd.DataFrame, column: str) -> tuple:
+    return df[column].mean(), df[column].max()
+
+
+def format_lap_time(seconds: float) -> str:
+    minutes = int(seconds // 60)
+    remaining_seconds = seconds % 60
+    return f"{minutes}:{remaining_seconds:04.1f}"
