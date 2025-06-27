@@ -1,20 +1,16 @@
+# utils.py
+
 import pandas as pd
+import numpy as np
 
-def load_telemetry_csv(file):
-    # Leer el archivo como texto
-    lines = file.read().decode('utf-8').splitlines()
-
-    # Buscar la línea que empieza con "time" para encontrar el inicio de los datos reales
-    data_start_index = next((i for i, line in enumerate(lines) if line.strip().startswith("time,")), None)
-
-    if data_start_index is None:
-        raise ValueError("No se encontró encabezado de datos en el archivo CSV.")
-
-    # Extraer solo los datos desde la línea del encabezado hacia abajo
-    csv_data = "\n".join(lines[data_start_index:])
-
-    # Leer como CSV con pandas
-    from io import StringIO
-    df = pd.read_csv(StringIO(csv_data))
-
+def clean_numeric_columns(df, columns):
+    for col in columns:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
     return df
+
+def compute_lap_times(df, lap_col, time_col):
+    return df.groupby(lap_col)[time_col].max() - df.groupby(lap_col)[time_col].min()
+
+def get_fastest_and_slowest_laps(lap_times):
+    return lap_times.idxmin(), lap_times.idxmax()
