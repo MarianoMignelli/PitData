@@ -1,13 +1,9 @@
-from typing import List, Optional
-import pandas as pd
+# detect.py
 
-def detect_column(df: pd.DataFrame, keywords: List[str]) -> Optional[str]:
-    """
-    Busca la columna más probable del DataFrame según palabras clave.
-    """
+def detect_column(df, keywords):
     for col in df.columns:
-        col_lower = col.lower()
+        lower_col = col.lower()
         for keyword in keywords:
-            if keyword in col_lower:
+            if keyword.lower() in lower_col:
                 return col
     return None
