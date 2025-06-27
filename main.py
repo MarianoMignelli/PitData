@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+from app.utils import load_telemetry_csv
 
 # Configuración
 st.set_page_config(page_title="PitData", layout="wide")
