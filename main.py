@@ -6,20 +6,20 @@ from app.detect import detect_column
 from app.utils import (
     clean_numeric_columns,
     compute_lap_times_from_column,
-    filter_valid_laps,
     get_fastest_and_slowest_laps,
-    compute_avg_lap_time,
+    filter_valid_laps,
     compute_max_min,
-    format_lap_time,
+    format_lap_time
 )
 from app.plots import (
     plot_speed_line,
     plot_brake_line,
     plot_corner_speed,
     plot_speed_comparison,
-    plot_delta_time,
+    plot_delta_time
 )
 
+# Configuración inicial
 st.set_page_config(page_title="PitData", layout="wide")
 st.title("🏎️ Lee tu telemetría con Nosotros")
 
@@ -31,31 +31,25 @@ if uploaded_file:
 
         # Detectar columnas clave
         tiempo = detect_column(df, ["time", "tiempo", "timestamp"])
-        velocidad = detect_column(df, ["speed", "ground speed", "velocidad", "spd"])
+        velocidad = detect_column(df, ["ground speed", "speed", "velocidad"])
         rpm = detect_column(df, ["rpm"])
         g_lat = detect_column(df, ["g_lat", "g lateral"])
         g_long = detect_column(df, ["g_long", "g longitudinal"])
         vuelta = detect_column(df, ["lap", "vuelta"])
         distancia = detect_column(df, ["lap distance", "distance"])
         freno = detect_column(df, ["brake", "freno"])
-        invalida = detect_column(df, ["lap invalidated"])
-        tiempo_vuelta = detect_column(df, ["lap time"])
+        lap_time_col = detect_column(df, ["lap time"])
+        lap_invalid_col = detect_column(df, ["lap invalidated"])
 
-        # Limpiar
-        df = clean_numeric_columns(df, [tiempo, velocidad, rpm, g_lat, g_long, distancia, freno, invalida, tiempo_vuelta])
+        # Limpieza
+        df = clean_numeric_columns(df, [tiempo, velocidad, rpm, g_lat, g_long, distancia, freno, lap_time_col])
+        df_valid = filter_valid_laps(df, vuelta, lap_invalid_col)
 
-        # Filtrar vueltas válidas
-        if invalida and vuelta:
-            df_valid = filter_valid_laps(df, vuelta, invalida)
-        else:
-            df_valid = df
-
-        # Calcular vueltas y métricas
-        lap_times = compute_lap_times_from_column(df_valid, vuelta, tiempo_vuelta)
+        # Cálculos
+        lap_times = compute_lap_times_from_column(df_valid, vuelta, lap_time_col)
         lap_fast, lap_slow = get_fastest_and_slowest_laps(lap_times)
-        lap_avg = compute_avg_lap_time(lap_times)
         delta_fast_slow = lap_times[lap_slow] - lap_times[lap_fast]
-        v_avg, v_max = compute_max_min(df_valid, velocidad)
+        v_max, v_avg = compute_max_min(df_valid, velocidad)
 
         # Mostrar métricas
         st.markdown("### 📊 Resumen")
@@ -65,9 +59,9 @@ if uploaded_file:
         col3.metric("Delta entre vueltas", f"{delta_fast_slow:.2f}s")
 
         col4, col5, col6 = st.columns(3)
-        col4.metric("Tiempo promedio", f"{lap_avg:.2f}s")
-        col5.metric("Velocidad promedio", f"{v_avg:.1f} km/h")
-        col6.metric("Velocidad máxima", f"{v_max:.1f} km/h")
+        col4.metric("Tiempo Promedio", f"{sum(lap_times.values())/len(lap_times):.2f}s")
+        col5.metric("Velocidad Promedio", f"{v_avg:.1f} km/h")
+        col6.metric("Velocidad Máxima", f"{v_max:.1f} km/h")
 
         # Selector de vuelta
         vuelta_sel = st.selectbox(
@@ -76,15 +70,13 @@ if uploaded_file:
             format_func=lambda k: f"Vuelta {k} – {lap_times[k]:.2f}s"
         )
 
-        # Tabs con visualizaciones
-        tabs = st.tabs(["📈 Telemetría", "🛞 Freno", "📍 Velocidad por curva", "📊 Comparación", "⏱️ Delta de tiempo"])
+        # Tabs
+        tabs = st.tabs(["📈 Velocidad", "🛞 Freno", "📍 Velocidad por curva", "📊 Comparación", "⏱️ Delta de tiempo"])
 
-        # TAB 1: Velocidad
         with tabs[0]:
             st.subheader("Velocidad (línea)")
             st.plotly_chart(plot_speed_line(df_valid, vuelta, velocidad, distancia, vuelta_sel), use_container_width=True)
 
-        # TAB 2: Freno
         with tabs[1]:
             if freno:
                 st.subheader("Freno (línea)")
@@ -92,24 +84,20 @@ if uploaded_file:
             else:
                 st.warning("No se detectó columna de freno.")
 
-        # TAB 3: Velocidad por curva
         with tabs[2]:
             st.subheader("Velocidad por Curva")
             st.plotly_chart(plot_corner_speed(df_valid, vuelta, velocidad, distancia, vuelta_sel), use_container_width=True)
 
-        # TAB 4: Comparación rápida vs promedio
         with tabs[3]:
             st.subheader("Comparación Vuelta Rápida vs Promedio")
             st.plotly_chart(plot_speed_comparison(df_valid, vuelta, velocidad, distancia, [lap_fast]), use_container_width=True)
 
-        # TAB 5: Delta
         with tabs[4]:
             st.subheader("Delta de Tiempo entre vueltas")
             df_fast = df_valid[df_valid[vuelta] == lap_fast]
             df_sel = df_valid[df_valid[vuelta] == vuelta_sel]
             st.plotly_chart(plot_delta_time(df_fast, df_sel, distancia, tiempo), use_container_width=True)
 
-        # Datos crudos (opcional)
         with st.expander("📂 Ver datos crudos"):
             st.dataframe(df_valid.head(100))
 
